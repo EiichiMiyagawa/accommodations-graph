@@ -1,0 +1,245 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+  <title>宿泊施設グラフ</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.6/dayjs.min.js"></script>
+</head><body>
+  <h1 id=title></h1>
+  <select id="display-contents-select"></select>
+  <select id="from-year"></select>年<select id="from-month"></select>月　～　<select id="to-year"></select>年<select id="to-month"></select>月
+  <div id=divpie></div>
+  <hr />
+  <a href="https://resas.go.jp/tourism-hotel-analysis/" target="_blank">CSVデータ：RESAS</a>, <a href="https://github.com/EiichiMiyagawa/accommodations-graph" target="_blank">src</a>)
+  
+  <script type="module">
+    import { ChartBar } from "https://eiichimiyagawa.github.io/chart-bar-plotly/chart-bar.js";
+    import { CSV } from "https://js.sabae.cc/CSV.js";
+    
+    // iOS14以前に関する対応（top-level await未対応のため）
+    addEventListener("load", async () => {
+      title.textContent = document.title;
+      const displayContentsSelect = document.getElementById("display-contents-select");
+      
+      const displayContents = [
+      {
+        key: "従業者規模別で表示する",
+        value: 1,
+        classification: [
+        {
+          key: "すべての従業者規模",
+          value: 100
+        },
+        {
+          key: "0～9人",
+          value: 101
+        },
+        {
+          key: "10～29人",
+          value: 102
+        },
+        {
+          key: "30～99人",
+          value: 103
+        },
+        {
+          key: "100人以上",
+          value: 104
+        }
+        ]
+      },
+      {
+        key: "宿泊施設タイプ別で表示する",
+        value: 2,
+        classification: [
+        {
+          key: "すべての宿泊施設タイプ",
+          value: 200
+        },
+        {
+          key: "旅館",
+          value: 201
+        },
+        {
+          key: "リゾートホテル",
+          value: 202
+        },
+        {
+          key: "ビジネスホテル",
+          value: 203
+        },
+        {
+          key: "シティホテル",
+          value: 204
+        },
+        {
+          key: "会社・団体の宿泊所",
+          value: 205
+        },
+        // {
+          //   key: "簡易宿所・その他",
+          //   value: 206
+          // },
+          {
+            key: "簡易宿所",
+            value: 207
+          }
+          ]
+        }
+        ];
+        
+        const chartTitle = ["施設数（施設）", "延べ宿泊者数（総数：人泊）", "延べ宿泊者数（日本人：人泊）", "延べ宿泊者数（外国人：人泊）", "定員稼働率（％）", "客室稼働率（％）", "延べ宿泊者数（総数）前年同月比", "延べ宿泊者数（日本人）前年同月比", "延べ宿泊者数（外国人）前年同月比"];
+        
+        const url = "./観光_国内_宿泊施設_宿泊施設.csv";
+        const data = await CSV.fetch(url);
+        const csv = await CSV.toJSON(data);
+        
+        const from = dayjs().subtract(1, "years").subtract(6, "months");
+        const to = dayjs().subtract(1, "years");
+        
+        const selectFromYearElement = document.getElementById("from-year");
+        const selectToYearElement = document.getElementById("to-year");
+        for (let y = 2018; y <= 2021; y++) {
+          const option = document.createElement("option");
+          option.textContent = y;
+          option.value = y;
+          const fromOption = option.cloneNode(true);
+          const toOption = option.cloneNode(true);
+          if (from.year() == y) {
+            fromOption.selected = true;
+          }
+          if (to.year() == y) {
+            toOption.selected = true;
+          }
+          selectFromYearElement.append(fromOption);
+          selectToYearElement.append(toOption);
+        }
+        
+        const selectFromMonthElement = document.getElementById("from-month");
+        const selectToMonthElement = document.getElementById("to-month");
+        for (let m = 1; m <= 12; m++) {
+          const option = document.createElement("option");
+          option.textContent = m;
+          option.value = m;
+          const fromOption = option.cloneNode(true);
+          const toOption = option.cloneNode(true);
+          if (from.month() + 1 == m) {
+            fromOption.selected = true;
+          }
+          if (to.month() + 1 == m) {
+            toOption.selected = true;
+          }
+          selectFromMonthElement.append(fromOption);
+          selectToMonthElement.append(toOption);
+        }
+        
+        const show = () => {
+          divpie.innerHTML = "";
+          const csv2 = csv.filter((c) => {
+            const from = `${selectFromYearElement.value}${selectFromMonthElement.value.toString().padStart(2, "0")}`;
+            const to = `${selectToYearElement.value}${selectToMonthElement.value.toString().padStart(2, "0")}`;
+            const base = `${c["集計年"]}${c["集計月"].padStart(2, "0")}`;
+            return (from <= base) && (base <= to);
+          });
+          
+          if (csv2.length) {
+            const yearMonth = csv2.map((c) => {
+              return {
+                year: Number(c["集計年"]),
+                month: Number(c["集計月"])
+              }
+            }).filter((ym1, index, self) => {
+              return self.findIndex((ym2) => {
+                return (ym1.year == ym2.year) && (ym1.month == ym2.month)
+              }) == index; 
+            }).sort((ym1, ym2) => {
+              if (ym1.year < ym2.year) {
+                return -1;
+              }
+              if (ym1.year > ym2.year) {
+                return 1;
+              }
+              if (ym1.month < ym2.month) {
+                return -1;
+              }
+              if (ym1.month > ym2.month) {
+                return 1;
+              }
+              return 0;
+            });
+
+            chartTitle.forEach((title) => {
+              const data = [];
+              displayContents.find((d) => {
+                return d.value == displayContentsSelect.value;
+              }).classification.forEach((c) => {
+                const data2 = {};
+                yearMonth.forEach((ym, index) => {
+                  const key = `${ym.year}年${ym.month}月`;
+                  let value = csv2.find((c2) => {
+                    return (Number(c2["集計年"]) == ym.year) && (Number(c2["集計月"]) == ym.month) && (c2["表示内容コード"] == displayContentsSelect.value) && (Number(c2["表示分類コード"]) == c.value);
+                  })[title];
+                  if (value == "-") {
+                    value = "0";
+                  }
+                  data2[key] = value;
+                });
+                const obj = {};
+                obj[c.key] = data2;
+                data.push(obj);
+              });
+              
+              const chartBar = new ChartBar(data, {
+                width: window.innerWidth - 64,
+                height: 400
+              });
+              const div2 = document.createElement("div");
+              div2.style.marginTop = "32px";
+              const span = document.createElement("span");
+              span.textContent = title;
+              div2.appendChild(span);
+              div2.appendChild(chartBar);
+              div2.appendChild(document.createElement("hr"));
+              divpie.append(div2);
+            });
+          }
+        }
+        
+        displayContentsSelect.onchange = (event) => {
+          show();
+        };
+        displayContents.forEach((d) => {
+          const option = document.createElement("option");
+          option.textContent = d.key;
+          option.value = d.value;
+          displayContentsSelect.append(option);
+        });
+        
+        selectFromYearElement.onchange = ((event) => {
+          show();
+        });
+        selectFromMonthElement.onchange = ((event) => {
+          show();
+        });
+        selectToYearElement.onchange = ((event) => {
+          show();
+        });
+        selectToMonthElement.onchange = ((event) => {
+          show();
+        });
+        
+        show();
+      });
+    </script>
+    
+    <style>
+      body {
+        text-align: center;
+        font-family: sans-serif;
+      }
+      
+      textarea {
+        width: 70vw;
+        height: 8em;
+      }
+    </style>
+  </body>
+  </html>  
+  
