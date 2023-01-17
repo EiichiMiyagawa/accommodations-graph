@@ -91,8 +91,8 @@
         const data = await CSV.fetch(url);
         const csv = await CSV.toJSON(data);
         
-        const from = dayjs().subtract(1, "years").subtract(6, "months");
-        const to = dayjs().subtract(1, "years");
+        const from = dayjs("2018/01/01");
+        const to = dayjs("2021/12/01");
         
         const selectFromYearElement = document.getElementById("from-year");
         const selectToYearElement = document.getElementById("to-year");
